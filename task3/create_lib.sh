@@ -1,47 +1,62 @@
 #!/bin/sh
 
-# trap execution errors
 set -e
-trap 'echo "Error: Script execution failed" >&2; exit 1' ERR
 
-# print usage message and exit 
+trap 'echo "Error: Script failed at line $LINENO" >&2; exit 1' ERR
+
 usage() {
     for msg in "$@"; do printf "%s\n" "${0##*/}: $msg" >&2; done
-    echo "usage: ${0##*/} source group" >&2
+    echo "usage: ${0##*/} library_root group_name" >&2
     exit 1
 }
 
-# check if there are exactly 2 arguments, throw usage if not
-test $# -eq 2 || usage
+test $# -eq 2 || usage "invalid number of arguments"
 
-# capture arguments
-LIBRARY_DIR="$1"
+LIBRARY_ROOT="$1"
 GROUP_NAME="$2"
 
-# create high-level directory
-mkdir -p "$LIBRARY_DIR"
-chmod 755 "$LIBRARY_DIR"
+# Проверка существования группы
+if ! getent group "$GROUP_NAME" > /dev/null; then
+    echo "${0##*/}: group '$GROUP_NAME' does not exist" >&2
+    exit 1
+fi
 
-# create a marker
-echo "library v1.0" > "$LIBRARY_DIR/.library"
-chmod 644 "$LIBRARY_DIR/.library"
+# Создание корневого каталога
+mkdir -p "$LIBRARY_ROOT"
 
-# create a library directories
-mkdir -p "$LIBRARY_DIR/books" "$LIBRARY_DIR/authors"
-chmod 755 "$LIBRARY_DIR/books" "$LIBRARY_DIR/authors"
-chmod o-w "$LIBRARY_DIR/books" "$LIBRARY_DIR/authors"
+# Создание файла-маркера
+echo "library v1.0" > "$LIBRARY_ROOT/.library"
 
-# create a price directory
-mkdir -p "$LIBRARY_DIR/prices"
-chmod 750 "$LIBRARY_DIR/prices"
+# Установка прав на корневой каталог (755 - владелец полный доступ, остальные чтение+исполнение)
+chmod 755 "$LIBRARY_ROOT"
 
-# delegate directory to a provided group
-chown :"$GROUP_NAME" "$LIBRARY_DIR/prices"
+# Создание подкаталогов
+mkdir -p "$LIBRARY_ROOT/books"
+mkdir -p "$LIBRARY_ROOT/authors"
+mkdir -p "$LIBRARY_ROOT/prices"
+mkdir -p "$LIBRARY_ROOT/.tmp"
 
-# create a tmp symlink, targeting system /tmp with our custom subdirectories
-mkdir -p "/tmp/$LIBRARY_DIR/.tmp"
-ln -sf "/tmp/$LIBRARY_DIR/.tmp" "$LIBRARY_DIR"
+# Установка прав на каталоги:
 
-# provide permissions for the actual tmp directories
-chmod 1770 "/tmp/$LIBRARY_DIR/.tmp"
-chown :"$GROUP_NAME" "/tmp/$LIBRARY_DIR/.tmp"
+# books и authors: 755 - владелец полный доступ, остальные чтение+исполнение
+chmod 755 "$LIBRARY_ROOT/books"
+chmod 755 "$LIBRARY_ROOT/authors"
+
+# prices: 750 - владелец полный доступ, группа чтение+исполнение, остальные нет доступа
+chmod 750 "$LIBRARY_ROOT/prices"
+
+# .tmp: 1770 - sticky bit + владелец и группа полный доступ, остальные нет доступа
+chmod 1770 "$LIBRARY_ROOT/.tmp"
+
+# Изменение группы для prices и .tmp
+chgrp "$GROUP_NAME" "$LIBRARY_ROOT/prices"
+chgrp "$GROUP_NAME" "$LIBRARY_ROOT/.tmp"
+
+# Установка владельца файла-маркера как у корневого каталога
+# (обычно это текущий пользователь, но на всякий случай копируем из корневого каталога)
+if [ -e "$LIBRARY_ROOT/.library" ]; then
+    LIBRARY_OWNER=$(stat -c "%u" "$LIBRARY_ROOT")
+    LIBRARY_GROUP=$(stat -c "%g" "$LIBRARY_ROOT")
+    chown "$LIBRARY_OWNER:$LIBRARY_GROUP" "$LIBRARY_ROOT/.library"
+    chmod 644 "$LIBRARY_ROOT/.library"
+fi
