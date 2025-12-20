@@ -10,7 +10,7 @@ usage() {
     exit 1
 }
 
-# Обработка опционального флага -v
+
 VERBOSE=0
 while getopts "v" opt; do
     case $opt in
@@ -28,13 +28,13 @@ PRICE="$3"
 shift 3
 AUTHORS="$@"
 
-# Проверка существования файла книги
+
 if [ ! -f "$BOOK_FILE" ]; then
     echo "${0##*/}: book file '$BOOK_FILE' does not exist" >&2
     exit 1
 fi
 
-# Поиск корня библиотеки по файлу-маркеру
+
 find_library_root() {
     local dir="$1"
     while [ "$dir" != "/" ]; do
@@ -51,7 +51,7 @@ find_library_root() {
     exit 1
 }
 
-# Начальный поиск с текущего каталога
+
 CURRENT_DIR=$(pwd)
 LIBRARY_ROOT=$(find_library_root "$CURRENT_DIR")
 
@@ -69,7 +69,7 @@ for dir in "$BOOKS_DIR" "$AUTHORS_DIR" "$PRICES_DIR" "$TMP_DIR"; do
     fi
 done
 
-# Генерация уникального имени файла книги
+
 find_unique_filename() {
     local base_name="$1"
     local suffix=""
@@ -82,7 +82,7 @@ find_unique_filename() {
     echo "${base_name}${suffix}"
 }
 
-# Получение уникального имени
+
 FINAL_BOOK_NAME=$(find_unique_filename "$BOOK_NAME")
 FINAL_BOOK_PATH="$BOOKS_DIR/$FINAL_BOOK_NAME"
 
@@ -90,42 +90,46 @@ if [ "$VERBOSE" -eq 1 ]; then
     echo "Final book name: $FINAL_BOOK_NAME" >&2
 fi
 
-# Копирование во временный каталог
-TMP_BOOK_PATH="$TMP_DIR/$(basename "$BOOK_FILE")"
+
+TMP_BOOK_NAME="tmp_book_$$_$(date +%s%N)"
+TMP_BOOK_PATH="$TMP_DIR/$TMP_BOOK_NAME"
+
 if [ "$VERBOSE" -eq 1 ]; then
     echo "Copying to tmp: $TMP_BOOK_PATH" >&2
 fi
-cp "$BOOK_FILE" "$TMP_BOOK_PATH"
 
-# Перемещение из временного каталога в конечный
+cp "$BOOK_FILE" "$TMP_BOOK_PATH" || {
+    echo "${0##*/}: failed to copy book file to temp directory" >&2
+    exit 1
+}
+
+
 mv "$TMP_BOOK_PATH" "$FINAL_BOOK_PATH"
 
-# Установка прав доступа на файл книги (владелец и группа: чтение+запись, остальные: только чтение)
+
 chmod 664 "$FINAL_BOOK_PATH"
 
-# Создание файла цены, если указана
+
 if [ -n "$PRICE" ] && [ "$PRICE" != "-" ]; then
     PRICE_FILE="$PRICES_DIR/${FINAL_BOOK_NAME}.price"
     echo "$PRICE" > "$PRICE_FILE"
-    chmod 644 "$PRICE_FILE"  # владелец: чтение+запись, остальные: только чтение
+    chmod 644 "$PRICE_FILE" 
     if [ "$VERBOSE" -eq 1 ]; then
         echo "Created price file: $PRICE_FILE" >&2
     fi
 fi
 
-# Обработка авторов
+
 for author in $AUTHORS; do
     AUTHOR_DIR="$AUTHORS_DIR/$author"
     
-    # Создание каталога автора, если не существует
+
     if [ ! -d "$AUTHOR_DIR" ]; then
         mkdir "$AUTHOR_DIR"
-        # Установка таких же прав, как у каталога authors
         AUTHOR_DIR_PERMS=$(stat -c "%a" "$AUTHORS_DIR")
         chmod "$AUTHOR_DIR_PERMS" "$AUTHOR_DIR"
     fi
     
-    # Создание жесткой ссылки на книгу в каталоге автора
     AUTHOR_BOOK_LINK="$AUTHOR_DIR/$FINAL_BOOK_NAME"
     ln "$FINAL_BOOK_PATH" "$AUTHOR_BOOK_LINK"
     
