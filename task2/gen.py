@@ -1,120 +1,201 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""
+Генератор тестовых данных для лабораторной работы.
+Создаёт входные файлы и эталонные выходные файлы для проверки заданий.
+"""
+
 import os
-import random
-from string import ascii_lowercase
 import sys
+import random
+import string
 
-ARTICLES = ["a", "an", "A", "An"]
-
-PUNCTUATION = [".", "!", "?", ";", ":"]
-
-EDGE_CASES = (
-    [
-        "",  # empty string
-        "word",  # one word
-        "a ",  # article with a space
-        "an ",  # article with a space
-        "a.b",  # dot inside of a word
-        "A! test",  # exclamaition after an article
-        "AN unusual CASE",  # article upper case
-    ]
-    + ARTICLES
-    + PUNCTUATION
-)
+# Константы, определяющие правила обработки текста
+SPECIAL_WORDS = ["a", "an", "A", "An", "aN", "AN"]  # Слова, которые могут удаляться
+SENTENCE_ENDINGS = [".", "!", "?", ";", ":"]  # Знаки препинания в конце
+TEST_EXAMPLES = [
+    "",  # Пустая строка
+    "word",  # Одно слово
+    "a ",  # Артикль с пробелом
+    "an ",  # Артикль с пробелом
+    "a.b",  # Точка внутри слова
+    "A! test",  # Восклицание после артикля
+    "AN unusual CASE",  # Артикль заглавными
+] + SPECIAL_WORDS + SENTENCE_ENDINGS
 
 
-def generate_random_sentence(min_words=3, max_words=15):
+def create_random_text(min_words=3, max_words=15):
+    """
+    Генерирует случайный текст (предложение) для тестирования.
+    
+    Параметры:
+        min_words: минимальное количество слов
+        max_words: максимальное количество слов
+    
+    Возвращает:
+        строку с сгенерированным предложением
+    """
+    # Иногда возвращаем один из предопределённых примеров (5% случаев)
+    if random.random() < 0.05:
+        return random.choice(TEST_EXAMPLES)
+    
     words = []
     word_count = random.randint(min_words, max_words)
-
-    if random.random() < 0.05:
-        return random.choice(EDGE_CASES)
-
+    
+    # Иногда добавляем артикль в начало (30% случаев)
     if random.random() < 0.3:
-        words.append(random.choice(ARTICLES))
-
+        words.append(random.choice(SPECIAL_WORDS))
+    
+    # Генерируем случайные слова
     for _ in range(word_count):
-        word = "".join(
-            random.choice(ascii_lowercase)
-            for _ in range(random.randint(2, 10))
-        )
+        word_length = random.randint(2, 10)
+        word = ''.join(random.choice(string.ascii_lowercase) for _ in range(word_length))
+        
+        # Иногда делаем слово с заглавной буквы (20% случаев)
         if random.random() < 0.2:
             word = word.capitalize()
+        
         words.append(word)
-
-    sentence = " ".join(words)
-
+    
+    # Соединяем слова пробелами
+    sentence = ' '.join(words)
+    
+    # В 70% случаев добавляем знак препинания в конце
     if random.random() < 0.7:
-        sentence += random.choice(PUNCTUATION)
-
+        sentence += random.choice(SENTENCE_ENDINGS)
+    
     return sentence
 
 
-def process_line(line, line_num):
-    words = line.split()
-    if words:
-        first_word = words[0].lower()
-        if first_word in ARTICLES:
-            words = words[1:]
+def transform_line(text, line_number):
+    """
+    Преобразует строку согласно правилам задания.
+    
+    Правила:
+    1. Удалить первый артикль (a/an/A/An), если он есть
+    2. Преобразовать регистр: нечётные строки в ВЕРХНИЙ, чётные в нижний
+    3. Добавить точку в конце, если нет знака препинания
+    
+    Параметры:
+        text: исходная строка
+        line_number: номер строки (начиная с 1)
+    
+    Возвращает:
+        преобразованную строку
+    """
+    # Разбиваем на слова
+    words = text.split()
+    
+    # Проверяем, начинается ли строка с артикля
+    if words and words[0].lower() in [w.lower() for w in SPECIAL_WORDS]:
+        words = words[1:]  # Удаляем первый артикль
+    
+    # Собираем обратно
+    result = ' '.join(words)
+    
+    # Применяем преобразование регистра по номеру строки
+    if line_number % 2 == 1:  # Нечётная строка
+        result = result.upper()
+    else:  # Чётная строка
+        result = result.lower()
+    
+    # Добавляем точку в конце, если нет знака препинания
+    if not result or result[-1] not in SENTENCE_ENDINGS:
+        result += '.'
+    
+    return result
 
-    line = " ".join(words)
-    line = line.upper() if line_num % 2 == 1 else line.lower()
 
-    if (
-        len(line) == 0
-        or len(line) > 0
-        and line[-1] not in {".", "!", "?", ";", ":"}
-    ):
-        line += "."
+def save_test_files(test_number, input_lines, expected_lines):
+    """
+    Сохраняет тестовые данные в файлы.
+    
+    Параметры:
+        test_number: номер теста
+        input_lines: список входных строк
+        expected_lines: список ожидаемых выходных строк
+    """
+    # Имена файлов
+    input_file = f"tests/test_{test_number}_input.txt"
+    expected_file = f"tests/test_{test_number}_expected.txt"
+    
+    # Запись входных данных
+    with open(input_file, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(input_lines))
+    
+    # Запись ожидаемых результатов
+    with open(expected_file, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(expected_lines))
+    
+    print(f"  Тест {test_number}: {len(input_lines)} строк")
 
-    return line
 
-
-def generate_test_cases(n: int = 10):
-    def write_input_expected(
-        i: int, input_lines: list[str], expected_lines: list[str]
-    ):
-        with open(f"tests/test_{i}_input.txt", "w", encoding="utf-8") as f:
-            f.write("\n".join(input_lines))
-
-        with open(f"tests/test_{i}_expected.txt", "w", encoding="utf-8") as f:
-            f.write("\n".join(expected_lines))
-
-    os.makedirs("tests", exist_ok=True)
-
-    for i in range(1, n + 2):
-        input_lines, expected_lines = [], []
-        if i == 1:
-            input_lines = EDGE_CASES
-            expected_lines = [
-                process_line(line, index)
-                for index, line in enumerate(EDGE_CASES, 1)
-            ]
+def generate_all_tests(count=10):
+    """
+    Генерирует указанное количество тестов.
+    
+    Параметры:
+        count: количество тестов для генерации
+    """
+    print(f"Генерация {count} тестов в папке 'tests'...")
+    
+    # Создаём папку для тестов, если её нет
+    os.makedirs('tests', exist_ok=True)
+    
+    for test_num in range(1, count + 2):  # +1 для первого специального теста
+        input_data = []
+        expected_data = []
+        
+        if test_num == 1:
+            # Первый тест содержит все граничные случаи
+            print("\nСоздание специального теста с граничными случаями...")
+            input_data = TEST_EXAMPLES
+            for idx, line in enumerate(TEST_EXAMPLES, 1):
+                expected_data.append(transform_line(line, idx))
         else:
-            num_lines = random.randint(1, 1000)
+            # Обычные тесты со случайными данными
+            lines_count = random.randint(1, 1000)
+            print(f"\nТест {test_num}: {lines_count} случайных строк")
+            
+            for line_idx in range(1, lines_count + 1):
+                # Генерируем случайную строку
+                original = create_random_text()
+                input_data.append(original)
+                # Преобразуем согласно правилам
+                expected_data.append(transform_line(original, line_idx))
+        
+        # Сохраняем тест
+        save_test_files(test_num, input_data, expected_data)
+    
+    print(f"\n✅ Готово! Сгенерировано {count} тестов в папке 'tests'")
+    print("Файлы: test_N_input.txt и test_N_expected.txt")
 
-            for line_num in range(1, num_lines + 1):
-                line = generate_random_sentence()
-                input_lines.append(line)
-                expected_lines.append(process_line(line, line_num))
 
-        write_input_expected(i, input_lines, expected_lines)
-
-    print(f"Generated {n} test cases in tests/ directory")
-
-
-def print_help():
-    print("python gen.py [num_tests]")
-    sys.exit()
+def show_usage():
+    """Показывает справку по использованию программы."""
+    print("Использование:")
+    print("  python gen.py [количество_тестов]")
+    print("  Пример: python gen.py 15")
+    sys.exit(1)
 
 
 if __name__ == "__main__":
-    num_tests = 10
+    # Обработка аргументов командной строки
+    tests_count = 10  # Значение по умолчанию
+    
     if len(sys.argv) > 2:
-        print_help()
+        print("❌ Ошибка: слишком много аргументов")
+        show_usage()
     elif len(sys.argv) == 2:
         try:
-            num_tests = int(sys.argv[1])
-        except Exception:
-            print_help()
-
-    generate_test_cases(num_tests)
+            tests_count = int(sys.argv[1])
+            if tests_count < 1:
+                print("❌ Количество тестов должно быть положительным числом")
+                show_usage()
+        except ValueError:
+            print("❌ Ошибка: аргумент должен быть числом")
+            show_usage()
+    
+    # Запуск генерации
+    generate_all_tests(tests_count)
