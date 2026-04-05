@@ -1,47 +1,46 @@
 #!/bin/sh
 
-# trap execution errors
-set -e
-trap 'echo "Error: Script execution failed" >&2; exit 1' ERR
-
-# print usage message and exit 
 usage() {
-    for msg in "$@"; do printf "%s\n" "${0##*/}: $msg" >&2; done
-    echo "usage: ${0##*/} source group" >&2
-    exit 1
+	for msg in "$@"; do printf "%s\n" "${0##*/}: $msg" >&2; done
+	echo "usage: ${0##*/} start_dir group_name" >&2
+	exit 1
 }
 
-# check if there are exactly 2 arguments, throw usage if not
-test $# -eq 2 || usage
+start_dir="$1"
+group="$2"
 
-# capture arguments
-LIBRARY_DIR="$1"
-GROUP_NAME="$2"
+set -e
 
-# create high-level directory
-mkdir -p "$LIBRARY_DIR"
-chmod 755 "$LIBRARY_DIR"
+trap 'echo "Error occured"' ERR
 
-# create a marker
-echo "library v1.0" > "$LIBRARY_DIR/.library"
-chmod 644 "$LIBRARY_DIR/.library"
+if [ $# -ne 2 ]; then
+	usage "invalid number of arguments"
+fi
 
-# create a library directories
-mkdir -p "$LIBRARY_DIR/books" "$LIBRARY_DIR/authors"
-chmod 755 "$LIBRARY_DIR/books" "$LIBRARY_DIR/authors"
-chmod o-w "$LIBRARY_DIR/books" "$LIBRARY_DIR/authors"
+if [ ! -d "$start_dir" ]; then
+	mkdir "$start_dir"
+	chmod 755 "$start_dir"
+	echo "library v1.0" > "$start_dir/.library"
+fi
 
-# create a price directory
-mkdir -p "$LIBRARY_DIR/prices"
-chmod 750 "$LIBRARY_DIR/prices"
+if [ ! -d "$start_dir/authors" ]; then
+	mkdir "$start_dir/authors"
+	chmod 755 "$start_dir/authors"
+fi
 
-# delegate directory to a provided group
-chown :"$GROUP_NAME" "$LIBRARY_DIR/prices"
+if [ ! -d "$start_dir/books" ]; then
+	mkdir "$start_dir/books"
+	chmod 755 "$start_dir/books"
+fi
 
-# create a tmp symlink, targeting system /tmp with our custom subdirectories
-mkdir -p "/tmp/$LIBRARY_DIR/.tmp"
-ln -sf "/tmp/$LIBRARY_DIR/.tmp" "$LIBRARY_DIR"
+if [ ! -d "$start_dir/prices" ]; then
+	mkdir "$start_dir/prices"
+	chmod 751 "$start_dir/prices"
+	chgrp "$group" "$start_dir/prices"
+fi
 
-# provide permissions for the actual tmp directories
-chmod 1770 "/tmp/$LIBRARY_DIR/.tmp"
-chown :"$GROUP_NAME" "/tmp/$LIBRARY_DIR/.tmp"
+if  [ ! -d "$start_dir/.tmp" ]; then
+	mkdir "$start_dir/.tmp"
+	chmod 770 "$start_dir/.tmp"
+	chgrp "$group" "$start_dir/.tmp"
+fi
